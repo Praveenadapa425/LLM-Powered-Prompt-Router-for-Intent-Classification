@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List
-
 from openai import OpenAI
 
 from app.config import get_settings
@@ -11,17 +9,17 @@ class LLMConfigurationError(RuntimeError):
     """Raised when the LLM client is missing required configuration."""
 
 
-class GrokClient:
+class OpenAICompatibleClient:
     def __init__(self) -> None:
         settings = get_settings()
-        if not settings.grok_api_key:
+        if not settings.llm_api_key:
             raise LLMConfigurationError(
-                "Missing GROK_API_KEY. Set it in your environment or .env file."
+                "Missing API key. Set one of LLM_API_KEY, GROQ_API_KEY, GROK_API_KEY, or OPENAI_API_KEY."
             )
 
         self.classifier_model = settings.classifier_model
         self.generation_model = settings.generation_model
-        self._client = OpenAI(api_key=settings.grok_api_key, base_url=settings.grok_base_url)
+        self._client = OpenAI(api_key=settings.llm_api_key, base_url=settings.llm_base_url)
 
     def complete(
         self,
@@ -42,5 +40,5 @@ class GrokClient:
         return response.choices[0].message.content or ""
 
 
-def build_client() -> GrokClient:
-    return GrokClient()
+def build_client() -> OpenAICompatibleClient:
+    return OpenAICompatibleClient()
