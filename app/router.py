@@ -62,6 +62,97 @@ def _extract_manual_override(message: str) -> Tuple[Optional[str], str]:
     return intent, cleaned_message
 
 
+def _contains_any(text: str, terms: set[str]) -> bool:
+    return any(term in text for term in terms)
+
+
+def _apply_intent_guardrails(message: str, result: Dict[str, Any]) -> Dict[str, Any]:
+    text = message.strip().lower()
+    greeting_terms = {"hi", "hey", "hello", "yo"}
+    creative_terms = {
+        "poem",
+        "haiku",
+        "lyrics",
+        "song",
+        "story",
+        "joke",
+        "riddle",
+    }
+    code_terms = {
+        "python",
+        "javascript",
+        "node",
+        "sql",
+        "query",
+        "function",
+        "bug",
+        "debug",
+        "stack trace",
+        "api",
+        "class",
+        "algorithm",
+        "code",
+    }
+    data_terms = {
+        "average",
+        "mean",
+        "median",
+        "distribution",
+        "correlation",
+        "dataset",
+        "pivot table",
+        "numbers",
+        "variance",
+        "outlier",
+    }
+    writing_terms = {
+        "writing",
+        "sentence",
+        "paragraph",
+        "rewrite",
+        "tone",
+        "awkward",
+        "verbose",
+        "clarity",
+        "grammar",
+        "professional",
+    }
+    career_terms = {
+        "career",
+        "resume",
+        "cv",
+        "job",
+        "interview",
+        "cover letter",
+        "promotion",
+        "role",
+        "linkedin",
+    }
+
+    if text in greeting_terms or len(text) <= 2:
+        return {**result, "intent": "unclear", "confidence": 0.0}
+
+    if _contains_any(text, creative_terms):
+        return {**result, "intent": "unclear", "confidence": 0.0}
+
+    # Keep SQL/programming questions in the code lane.
+    if "sql" in text or ("query" in text and _contains_any(text, {"explain", "fix", "debug"})):
+        return {**result, "intent": "code", "confidence": max(float(result.get("confidence", 0.0)), 0.90)}
+
+    if _contains_any(text, {"writing is too verbose", "too verbose", "awkward"}):
+        return {**result, "intent": "writing", "confidence": max(float(result.get("confidence", 0.0)), 0.90)}
+
+    domain_hits = 0
+    domain_hits += int(_contains_any(text, code_terms))
+    domain_hits += int(_contains_any(text, data_terms))
+    domain_hits += int(_contains_any(text, writing_terms))
+    domain_hits += int(_contains_any(text, career_terms))
+    if domain_hits >= 2 and " and " in text:
+        return {**result, "intent": "unclear", "confidence": 0.0}
+
+    return result
+
+
 def classify_intent(message: str, client: CompletionClient) -> Dict[str, Any]:
     manual_intent, cleaned_message = _extract_manual_override(message)
     if manual_intent:
@@ -82,6 +173,7 @@ def classify_intent(message: str, client: CompletionClient) -> Dict[str, Any]:
         return result
 
     result = _normalize_intent(payload)
+    result = _apply_intent_guardrails(message, result)
     result["raw_classifier_output"] = raw_response
     result["cleaned_message"] = cleaned_message
     result["manual_override"] = False

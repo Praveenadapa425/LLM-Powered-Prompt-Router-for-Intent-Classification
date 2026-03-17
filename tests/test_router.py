@@ -91,3 +91,38 @@ def test_invalid_intent_is_normalized_to_unclear() -> None:
     result = classify_intent("write me a poem", client)
 
     assert result["intent"] == "unclear"
+
+
+def test_guardrail_routes_sql_to_code() -> None:
+    client = FakeClient(classifier_response='{"intent": "writing", "confidence": 0.8}')
+    result = classify_intent("explain this sql query for me", client)
+
+    assert result["intent"] == "code"
+    assert result["confidence"] >= 0.9
+
+
+def test_guardrail_routes_creative_requests_to_unclear() -> None:
+    client = FakeClient(classifier_response='{"intent": "writing", "confidence": 0.9}')
+    result = classify_intent("Can you write me a poem about clouds?", client)
+
+    assert result["intent"] == "unclear"
+    assert result["confidence"] == 0.0
+
+
+def test_guardrail_routes_verbose_feedback_to_writing() -> None:
+    client = FakeClient(classifier_response='{"intent": "career", "confidence": 0.8}')
+    result = classify_intent("My boss says my writing is too verbose.", client)
+
+    assert result["intent"] == "writing"
+    assert result["confidence"] >= 0.9
+
+
+def test_guardrail_routes_mixed_intent_to_unclear() -> None:
+    client = FakeClient(classifier_response='{"intent": "career", "confidence": 0.8}')
+    result = classify_intent(
+        "I need to write a function that takes a user id and returns their profile, and I also need help with my resume.",
+        client,
+    )
+
+    assert result["intent"] == "unclear"
+    assert result["confidence"] == 0.0
